@@ -20,11 +20,11 @@
 #include "iosource/Manager.h"
 #include "SerializationFormat.h"
 
-using namespace std;
-
 namespace bro_broker {
 
-static inline Val* get_option(const char* option)
+namespace {
+
+Val* get_option(const char* option)
 	{
 	auto id = global_scope()->Lookup(option);
 
@@ -47,24 +47,6 @@ public:
 		}
 };
 
-class BrokerState {
-public:
-	BrokerState(BrokerConfig config, size_t congestion_queue_size)
-		: endpoint(std::move(config)),
-		  subscriber(endpoint.make_subscriber({}, congestion_queue_size)),
-		  status_subscriber(endpoint.make_status_subscriber(true))
-		{
-		}
-
-	broker::endpoint endpoint;
-	broker::subscriber subscriber;
-	broker::status_subscriber status_subscriber;
-};
-
-const broker::endpoint_info Manager::NoPeer{{}, {}};
-
-int Manager::script_scope = 0;
-
 struct unref_guard {
 	unref_guard(Val* v) : val(v) {}
 	~unref_guard() { Unref(val); }
@@ -84,48 +66,67 @@ struct scoped_reporter_location {
 };
 
 #ifdef DEBUG
-static std::string RenderMessage(std::string topic, const broker::data& x)
+std::string RenderMessage(std::string topic, const broker::data& x)
 	{
 	return fmt("%s -> %s", broker::to_string(x).c_str(), topic.c_str());
 	}
 
-static std::string RenderEvent(std::string topic, std::string name, const broker::data& args)
+std::string RenderEvent(std::string topic, std::string name, const broker::data& args)
 	{
 	return fmt("%s(%s) -> %s", name.c_str(), broker::to_string(args).c_str(), topic.c_str());
 	}
 
-static std::string RenderMessage(const broker::store::response& x)
+std::string RenderMessage(const broker::store::response& x)
 	{
 	return fmt("%s [id %" PRIu64 "]", (x.answer ? broker::to_string(*x.answer).c_str() : "<no answer>"), x.id);
 	}
 
-static std::string RenderMessage(const broker::vector* xs)
+std::string RenderMessage(const broker::vector* xs)
 	{
 	return broker::to_string(*xs);
 	}
 
-static std::string RenderMessage(const broker::data& d)
+std::string RenderMessage(const broker::data& d)
 	{
 	return broker::to_string(d);
 	}
 
-static std::string RenderMessage(const broker::vector& xs)
+std::string RenderMessage(const broker::vector& xs)
 	{
 	return broker::to_string(xs);
 	}
 
-static std::string RenderMessage(const broker::status& s)
+std::string RenderMessage(const broker::status& s)
 	{
 	return broker::to_string(s.code());
 	}
 
-static std::string RenderMessage(const broker::error& e)
+std::string RenderMessage(const broker::error& e)
 	{
 	return fmt("%s (%s)", broker::to_string(e.code()).c_str(),
 		   caf::to_string(e.context()).c_str());
 	}
-
 #endif
+
+} // namespace
+
+class BrokerState {
+public:
+	BrokerState(BrokerConfig config, size_t congestion_queue_size)
+		: endpoint(std::move(config)),
+		  subscriber(endpoint.make_subscriber({}, congestion_queue_size)),
+		  status_subscriber(endpoint.make_status_subscriber(true))
+		{
+		}
+
+	broker::endpoint endpoint;
+	broker::subscriber subscriber;
+	broker::status_subscriber status_subscriber;
+};
+
+const broker::endpoint_info Manager::NoPeer{{}, {}};
+
+int Manager::script_scope = 0;
 
 Manager::Manager(bool arg_reading_pcaps)
 	{
