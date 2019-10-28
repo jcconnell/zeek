@@ -1473,12 +1473,22 @@ void _set_processing_status(const char* status)
 		{
 		char buf[256];
 		bro_strerror_r(errno, buf, sizeof(buf));
-		if ( reporter )
-			reporter->Error("Failed to open process status file '%s': %s",
-			                proc_status_file, buf);
-		else
-			fprintf(stderr, "Failed to open process status file '%s': %s\n",
-			                proc_status_file, buf);
+		
+		string open_err = "Failed to open process status file '";
+			open_err += proc_status_file;
+			open_err += "': ";
+			open_err += buf;
+			open_err += "\n";
+		int fd_err_len = strlen(open_err.c_str());
+		while ( fd_err_len )
+			{	
+			int n = write(STDERR_FILENO, open_err.c_str(), fd_err_len);
+			if ( n < 0 && errno != EINTR && errno != EAGAIN )
+				break;
+			open_err += n;
+			fd_err_len -= n;
+			}
+
 		errno = old_errno;
 		return;
 		}
@@ -1497,7 +1507,26 @@ void _set_processing_status(const char* status)
 		len -= n;
 		}
 
-	safe_close(fd);
+	if ( close(fd) < 0 && errno != EINTR )
+                {
+                char buf[128];
+                bro_strerror_r(errno, buf, sizeof(buf));
+                string close_err = "close() error ";
+                	close_err += errno;
+                	close_err += ": ";
+                	close_err += buf;
+                	close_err += "\n";
+		int fd_cls_err_len = strlen(close_err.c_str());
+		while ( fd_cls_err_len )
+			{	
+			int n = write(STDERR_FILENO, close_err.c_str(), fd_cls_err_len);
+			if ( n < 0 && errno != EINTR && errno != EAGAIN )
+				break;
+			close_err += n;
+			fd_cls_err_len -= n;
+			}
+		abort();
+		}
 
 	errno = old_errno;
 	}
